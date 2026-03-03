@@ -1,0 +1,26 @@
+{
+    "gateway": {
+        "port": 18789,
+        "host": "127.0.0.1"
+    },
+    "providers": {
+        "claude": {
+            "type": "anthropic",
+            "apiKey": "sk-ant-...",
+            "defaultModel": "claude-sonnet-4-20250514"
+        },
+        "local": {
+            "type": "ollama",
+            "apiBase": "http://localhost:11434",
+            "defaultModel": "llama3.2"
+        }
+    },
+    "agents": {
+        "default": {
+            "provider": "claude"
+        }
+    },
+    "channels": {},
+    "skillsDir": "skills",
+    "workspaceDir": "workspace"
+}
