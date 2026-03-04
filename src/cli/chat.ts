@@ -3,7 +3,7 @@ import { type AppConfig } from "../config/schema.js";
 
 export async function startChat(config: AppConfig) {
     console.log("💬 Chat mode — type your message, Ctrl+C to exit\n");
-    console.log("(Agent loop is implemented in Phase 6 — this is the CLI shell)\n");
+    console.log("(TODO:Agent loop — this is the CLI shell)\n");
 
     const rl = readline.createInterface({
         input: process.stdin,
@@ -18,8 +18,7 @@ export async function startChat(config: AppConfig) {
                 return;
             }
 
-            // Phase 6 will wire this to the real agent loop
-            console.log(`Agent: [Agent loop not yet implemented — coming in Phase 6]`);
+            console.log(`Agent: [Agent loop not yet implemented]`);
             console.log(`       (You said: "${trimmed}")\n`);
 
             prompt();

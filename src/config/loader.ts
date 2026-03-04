@@ -74,7 +74,7 @@ function applyEnvOverrides(config: AppConfig): void {
         }
     }
 
-    if (process.env.OPENCLAW_GATEWAY_TOKEN) {
-        config.gateway.token = process.env.OPENCLAW_GATEWAY_TOKEN;
+    if (process.env.BEACNAI_GATEWAY_TOKEN) {
+        config.gateway.token = process.env.BEACNAI_GATEWAY_TOKEN;
     }
 }

@@ -1,16 +1,16 @@
 import { type AppConfig } from "../config/schema";
 import { globalBus } from "../bus/event-bus";
+import type { ProviderRegistry } from "../providers/registry";
 
 type GatewayWebSocketData = {
     ip: string | null;
 }
 
-export async function startGateway(config: AppConfig) {
+export async function startGateway(config: AppConfig, providers: ProviderRegistry) {
     const { host, port } = config.gateway;
 
     console.log(`🚀 Starting gateway on ws://${host}:${port}`);
 
-    // Minimal WS server stub — Phase 8 will flesh this out fully
     const server = Bun.serve({
         hostname: host,
         port,
@@ -72,7 +72,7 @@ export async function startGateway(config: AppConfig) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleFrame(ws: any, frame: any, config: AppConfig) {
-    // OpenClaw wire protocol — Phase 8 expands this significantly
+    // OpenClaw wire protocol 
     if (!frame.type) {
         ws.send(JSON.stringify({ type: "error", error: "Missing frame type" }));
         return;
@@ -153,7 +153,7 @@ function handleRequest(ws: any, frame: any) {
                     type: "res",
                     id,
                     ok: false,
-                    error: `Unknown method: ${method}. More methods coming in Phase 8.`,
+                    error: `Unknown method: ${method}.`,
                 })
             );
     }

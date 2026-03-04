@@ -16,8 +16,13 @@ async function main() {
     }
     switch (command) {
         case "gateway": {
+            const { ProviderRegistry } = await import("./providers/registry.js");
             const { startGateway } = await import("./gateway/server.js");
-            await startGateway(config);
+
+            console.log("\n📦 Loading providers...");
+            const providerRegistry = new ProviderRegistry(config);
+
+            await startGateway(config, providerRegistry);
             break;
         }
 
