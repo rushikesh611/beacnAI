@@ -1,57 +1,53 @@
-import { loadConfig } from "./config/loader";
+import { loadConfig } from "./config/loader.js";
+import { ProviderRegistry } from "./providers/registry.js";
+import { SessionManager } from "./session/manager.js";
+import { Memory } from "./memory/memory.js";
 
 const command = process.argv[2] ?? "gateway";
 
 async function main() {
-    console.log(`\n🗼 BeacnAI — OpenClaw-compatible agent\n`);
+    console.log(`\n🦞 BeacnAI — OpenClaw-compatible agent\n`);
 
-    let config;
+    const config = loadConfig();
+    console.log(`✅ Config loaded`);
 
-    try {
-        config = loadConfig()
-        console.log(`✅ Config loaded`);
-    } catch (err) {
-        console.error(`❌ ${err instanceof Error ? err.message : err}`);
-        process.exit(1);
-    }
+    console.log(`\n📦 Loading providers...`);
+    const providers = new ProviderRegistry(config);
+
+    console.log(`\n🗂️  Initializing session manager...`);
+    const sessions = new SessionManager(config.workspaceDir);
+
+    console.log(`\n🧠 Initializing memory...`);
+    const memory = new Memory(config.workspaceDir);
+    console.log(`   ${memory.list().length} memories loaded`);
+
     switch (command) {
         case "gateway": {
-            const { ProviderRegistry } = await import("./providers/registry.js");
             const { startGateway } = await import("./gateway/server.js");
-
-            console.log("\n📦 Loading providers...");
-            const providerRegistry = new ProviderRegistry(config);
-
-            await startGateway(config, providerRegistry);
+            await startGateway(config, providers, sessions, memory);
             break;
         }
 
         case "chat": {
             const { startChat } = await import("./cli/chat.js");
-            await startChat(config);
+            await startChat(config, providers, sessions, memory);
             break;
         }
 
         case "status": {
-            printStatus(config);
+            printStatus(config, memory);
             break;
         }
-
-        default:
-            console.error(`Unknown command: ${command}`);
-            console.log(`Usage: bun run src/index.ts <gateway|chat|status>`);
-            process.exit(1);
     }
 }
 
-function printStatus(config: ReturnType<typeof loadConfig>) {
-    console.log("=== Status ===");
-    console.log(`Gateway: ${config.gateway.host}:${config.gateway.port}`);
+function printStatus(config: ReturnType<typeof loadConfig>, memory: Memory) {
+    console.log("\n=== Status ===");
+    console.log(`Gateway:   ${config.gateway.host}:${config.gateway.port}`);
     console.log(`Providers: ${Object.keys(config.providers).join(", ")}`);
-    console.log(`Agents: ${Object.keys(config.agents).join(", ")}`);
-    console.log(`Channels: ${Object.keys(config.channels).join(", ") || "none"}`);
-    console.log(`Skills dir: ${config.skillsDir}`);
-    console.log(`Workspace: ${config.workspaceDir}`);
+    console.log(`Agents:    ${Object.keys(config.agents).join(", ")}`);
+    console.log(`Channels:  ${Object.keys(config.channels).join(", ") || "none"}`);
+    console.log(`Memories:  ${memory.list().length} entries`);
 }
 
 main().catch((err) => {

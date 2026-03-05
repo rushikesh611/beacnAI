@@ -1,12 +1,14 @@
 import { type AppConfig } from "../config/schema";
 import { globalBus } from "../bus/event-bus";
 import type { ProviderRegistry } from "../providers/registry";
+import type { Memory } from "../memory/memory";
+import type { SessionManager } from "../session/manager";
 
 type GatewayWebSocketData = {
     ip: string | null;
 }
 
-export async function startGateway(config: AppConfig, providers: ProviderRegistry) {
+export async function startGateway(config: AppConfig, providers: ProviderRegistry, sessions: SessionManager, memory: Memory) {
     const { host, port } = config.gateway;
 
     console.log(`🚀 Starting gateway on ws://${host}:${port}`);
@@ -28,7 +30,7 @@ export async function startGateway(config: AppConfig, providers: ProviderRegistr
                 return undefined;
             }
 
-            return new Response("MyAgent Gateway — connect via WebSocket", { status: 200 });
+            return new Response("BeacnAI Gateway — connect via WebSocket", { status: 200 });
         },
 
         websocket: {

@@ -1,7 +1,10 @@
 import * as readline from "readline";
 import { type AppConfig } from "../config/schema.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import type { SessionManager } from "../session/manager.js";
+import type { Memory } from "../memory/memory.js";
 
-export async function startChat(config: AppConfig) {
+export async function startChat(config: AppConfig, providers: ProviderRegistry, sessions: SessionManager, memory: Memory) {
     console.log("💬 Chat mode — type your message, Ctrl+C to exit\n");
     console.log("(TODO:Agent loop — this is the CLI shell)\n");
 
