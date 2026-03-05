@@ -7,21 +7,21 @@ export const GatewayConfigSchema = z.object({
 })
 
 export const ProviderConfigSchema = z.discriminatedUnion("type", [
-    z.object({
-        type: z.literal("anthropic"),
-        apiKey: z.string(),
-        defaultModel: z.string().default("claude-sonnet-4-20250514"),
-    }),
-    z.object({
-        type: z.literal("openai"),
-        apiKey: z.string(),
-        apiBase: z.string().optional(),
-        defaultModel: z.string().default("gpt-4o"),
-    }),
+    // z.object({
+    //     type: z.literal("anthropic"),
+    //     apiKey: z.string(),
+    //     defaultModel: z.string().default("claude-sonnet-4-20250514"),
+    // }),
+    // z.object({
+    //     type: z.literal("openai"),
+    //     apiKey: z.string(),
+    //     apiBase: z.string().optional(),
+    //     defaultModel: z.string().default("gpt-4o"),
+    // }),
     z.object({
         type: z.literal("ollama"),
         apiBase: z.string().default("http://localhost:11434"),
-        defaultModel: z.string().default("llama3.2"),
+        defaultModel: z.string().default("llama3.2")
     })
 ])
 

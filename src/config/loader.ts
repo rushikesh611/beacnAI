@@ -24,7 +24,7 @@ export function loadConfig(configPath?: string): AppConfig {
     }
 
     const result = AppConfigSchema.safeParse(parsed);
-
+    console.log(result)
     if (!result.success) {
         const errors = result.error.issues
             .map((e) => `  • ${e.path.join(".")}: ${e.message}`)
@@ -50,21 +50,21 @@ function findConfigFile(): string | undefined {
 
 function applyEnvOverrides(config: AppConfig): void {
     // Allow env vars to override sensitive fields
-    if (process.env.ANTHROPIC_API_KEY) {
-        for (const [, provider] of Object.entries(config.providers)) {
-            if (provider.type === "anthropic") {
-                provider.apiKey = process.env.ANTHROPIC_API_KEY;
-            }
-        }
-    }
+    // if (process.env.ANTHROPIC_API_KEY) {
+    //     for (const [, provider] of Object.entries(config.providers)) {
+    //         if (provider.type === "anthropic") {
+    //             provider.apiKey = process.env.ANTHROPIC_API_KEY;
+    //         }
+    //     }
+    // }
 
-    if (process.env.OPENAI_API_KEY) {
-        for (const [, provider] of Object.entries(config.providers)) {
-            if (provider.type === "openai") {
-                provider.apiKey = process.env.OPENAI_API_KEY;
-            }
-        }
-    }
+    // if (process.env.OPENAI_API_KEY) {
+    //     for (const [, provider] of Object.entries(config.providers)) {
+    //         if (provider.type === "openai") {
+    //             provider.apiKey = process.env.OPENAI_API_KEY;
+    //         }
+    //     }
+    // }
 
     if (process.env.DISCORD_TOKEN) {
         for (const [, channel] of Object.entries(config.channels)) {

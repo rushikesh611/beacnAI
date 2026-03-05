@@ -3,12 +3,13 @@ import { globalBus } from "../bus/event-bus";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Memory } from "../memory/memory";
 import type { SessionManager } from "../session/manager";
+import type { ToolRegistry } from "../tools/registry";
 
 type GatewayWebSocketData = {
     ip: string | null;
 }
 
-export async function startGateway(config: AppConfig, providers: ProviderRegistry, sessions: SessionManager, memory: Memory) {
+export async function startGateway(config: AppConfig, providers: ProviderRegistry, sessions: SessionManager, memory: Memory, tools: ToolRegistry) {
     const { host, port } = config.gateway;
 
     console.log(`🚀 Starting gateway on ws://${host}:${port}`);
