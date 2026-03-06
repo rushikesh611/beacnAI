@@ -1,6 +1,7 @@
 import type { Tool, ToolDefinition, AgentContext } from "./types.js";
 import { memorySaveTool, memoryGetTool, memorySearchTool, memoryDeleteTool } from "./builtin/memory.js";
 import { getTimeTool } from "./builtin/time.js";
+import { webSearchTool } from "./builtin/web-search.js";
 
 export class ToolRegistry {
     private tools: Map<string, Tool> = new Map();
@@ -15,6 +16,7 @@ export class ToolRegistry {
         this.register(memorySearchTool);
         this.register(memoryDeleteTool);
         this.register(getTimeTool);
+        this.register(webSearchTool);
 
         console.log(`  ✅ Built-in tools registered: ${[...this.tools.keys()].join(", ")}`);
     }
@@ -38,12 +40,18 @@ export class ToolRegistry {
         return [...this.tools.keys()];
     }
 
-    // Export as LLM-ready schema — used when calling the provider
     toSchema(): ToolDefinition[] {
         return [...this.tools.values()].map((t) => t.definition);
     }
 
-    // Execute a tool by name — called by the agent loop
+    // Only export schemas for a specific set of tool names
+    toSchemaFor(names: string[]): ToolDefinition[] {
+        return names
+            .map((n) => this.tools.get(n))
+            .filter((t): t is Tool => !!t)
+            .map((t) => t.definition);
+    }
+
     async execute(
         name: string,
         params: Record<string, unknown>,

@@ -24,7 +24,6 @@ export function loadConfig(configPath?: string): AppConfig {
     }
 
     const result = AppConfigSchema.safeParse(parsed);
-    console.log(result)
     if (!result.success) {
         const errors = result.error.issues
             .map((e) => `  • ${e.path.join(".")}: ${e.message}`)
