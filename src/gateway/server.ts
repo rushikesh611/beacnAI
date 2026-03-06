@@ -4,12 +4,13 @@ import type { ProviderRegistry } from "../providers/registry";
 import type { Memory } from "../memory/memory";
 import type { SessionManager } from "../session/manager";
 import type { ToolRegistry } from "../tools/registry";
+import type { SkillLoader } from "../skills/loader";
 
 type GatewayWebSocketData = {
     ip: string | null;
 }
 
-export async function startGateway(config: AppConfig, providers: ProviderRegistry, sessions: SessionManager, memory: Memory, tools: ToolRegistry) {
+export async function startGateway(config: AppConfig, providers: ProviderRegistry, sessions: SessionManager, memory: Memory, tools: ToolRegistry, skills: SkillLoader) {
     const { host, port } = config.gateway;
 
     console.log(`🚀 Starting gateway on ws://${host}:${port}`);

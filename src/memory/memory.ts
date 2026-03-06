@@ -117,7 +117,8 @@ export class Memory {
 
     private parse(raw: string): MemoryEntry | null {
         // Parse markdown frontmatter manually — avoids gray-matter dep at runtime
-        const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+        const normalized = raw.replace(/\r\n/g, "\n");
+        const fmMatch = normalized.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
         if (!fmMatch) return null;
 
         const fm = fmMatch[1] ?? "";

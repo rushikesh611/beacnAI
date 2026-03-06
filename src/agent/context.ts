@@ -1,14 +1,16 @@
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
+import type { Memory } from "../memory/memory.js";
 import type { Session } from "../session/session.js";
 import type { AgentConfig } from "../config/schema.js";
+import type { SkillLoader } from "../skills/loader.js";
 import type { Message } from "../providers/types.js";
-import type { Memory } from "../memory/memory.js";
 
 export function buildSystemPrompt(
     agentConfig: AgentConfig,
     memory: Memory,
-    workspaceDir: string
+    skillLoader: SkillLoader,
+    userMessage: string,        // needed so skills can match against it
 ): string {
     const parts: string[] = [];
 
@@ -31,7 +33,13 @@ export function buildSystemPrompt(
         parts.push(memoryContext);
     }
 
-    // 4. Current date/time — always useful for the agent
+    // 4. Skill instructions — only injected when relevant
+    const skillContext = skillLoader.buildSkillContext(userMessage);
+    if (skillContext) {
+        parts.push(`## Active Skills\n\n${skillContext}`);
+    }
+
+    // 5. Current date/time
     parts.push(`## Current Time\n${new Date().toISOString()}`);
 
     return parts.join("\n\n");

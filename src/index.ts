@@ -3,6 +3,7 @@ import { ProviderRegistry } from "./providers/registry.js";
 import { SessionManager } from "./session/manager.js";
 import { Memory } from "./memory/memory.js";
 import { ToolRegistry } from "./tools/registry.js";
+import { SkillLoader } from "./skills/loader.js";
 
 const command = process.argv[2] ?? "gateway";
 
@@ -25,21 +26,25 @@ async function main() {
     console.log(`\n🔧 Registering tools...`);
     const tools = new ToolRegistry();
 
+    console.log(`\n📖 Loading skills...`);
+    const skills = new SkillLoader(config.skillsDir);
+    console.log(`   ${skills.list().length} skills loaded`);
+
     switch (command) {
         case "gateway": {
             const { startGateway } = await import("./gateway/server.js");
-            await startGateway(config, providers, sessions, memory, tools);
+            await startGateway(config, providers, sessions, memory, tools, skills);
             break;
         }
 
         case "chat": {
             const { startChat } = await import("./cli/chat.js");
-            await startChat(config, providers, sessions, memory, tools);
+            await startChat(config, providers, sessions, memory, tools, skills);
             break;
         }
 
         case "status": {
-            printStatus(config, memory, tools);
+            printStatus(config, memory, tools, skills);
             break;
         }
 
@@ -52,7 +57,8 @@ async function main() {
 function printStatus(
     config: ReturnType<typeof loadConfig>,
     memory: Memory,
-    tools: ToolRegistry
+    tools: ToolRegistry,
+    skills: SkillLoader
 ) {
     console.log("\n=== Status ===");
     console.log(`Gateway:   ${config.gateway.host}:${config.gateway.port}`);
@@ -61,6 +67,7 @@ function printStatus(
     console.log(`Channels:  ${Object.keys(config.channels).join(", ") || "none"}`);
     console.log(`Memories:  ${memory.list().length} entries`);
     console.log(`Tools:     ${tools.list().join(", ")}`);
+    console.log(`Skills:    ${skills.list().map((s) => s.meta.name).join(", ") || "none"}`);
 }
 
 main().catch((err) => {
