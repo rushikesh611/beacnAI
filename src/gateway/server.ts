@@ -5,6 +5,7 @@ import type { Memory } from "../memory/memory.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { SkillLoader } from "../skills/loader.js";
 import { AgentRuntime } from "../agent/runtime.js";
+import { ChannelRegistry } from "../channels/registry.js";
 import { globalBus } from "../bus/event-bus.js";
 
 type GatewayWebSocketData = {
@@ -20,9 +21,15 @@ export async function startGateway(
     skills: SkillLoader
 ) {
     const { host, port } = config.gateway;
+
     const runtime = new AgentRuntime(config, providers, sessions, memory, tools, skills);
 
-    console.log(`🚀 Starting gateway on ws://${host}:${port}`);
+    // Start channels
+    console.log("\n🔌 Starting channels...");
+    const channels = new ChannelRegistry(config, runtime);
+    await channels.startAll();
+
+    console.log(`\n🚀 Starting gateway on ws://${host}:${port}`);
 
     const server = Bun.serve({
         hostname: host,
@@ -32,7 +39,11 @@ export async function startGateway(
             const url = new URL(req.url);
 
             if (url.pathname === "/health") {
-                return Response.json({ ok: true, ts: Date.now() });
+                return Response.json({
+                    ok: true,
+                    ts: Date.now(),
+                    channels: channels.list(),
+                });
             }
 
             if (server.upgrade(req, { data: { ip: req.headers.get("x-forwarded-for") } })) {
@@ -43,7 +54,6 @@ export async function startGateway(
         },
 
         websocket: {
-
             data: {} as GatewayWebSocketData,
             open(ws) {
                 console.log(`[Gateway] Client connected`);
@@ -69,11 +79,16 @@ export async function startGateway(
     console.log(`✅ Gateway listening on ws://${host}:${port}`);
     console.log(`   Health: http://${host}:${port}/health\n`);
 
-    process.on("SIGINT", () => {
+    // Graceful shutdown — stop channels cleanly before exit
+    const shutdown = async () => {
         console.log("\n🛑 Shutting down...");
+        await channels.stopAll();
         server.stop();
         process.exit(0);
-    });
+    };
+
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 
     setInterval(() => {
         globalBus.emit("gateway:heartbeat", { ts: Date.now() });
@@ -104,10 +119,9 @@ async function handleFrame(ws: any, frame: any, config: AppConfig, runtime: Agen
             break;
         }
 
-        case "req": {
+        case "req":
             await handleRequest(ws, frame, runtime);
             break;
-        }
 
         default:
             ws.send(JSON.stringify({
@@ -139,7 +153,6 @@ async function handleRequest(ws: any, frame: any, runtime: AgentRuntime) {
             break;
 
         case "agent": {
-            // Run the agent and stream chunks back over WS
             const { agentId = "default", channelId = "ws", userId = "ws-user", message } = params ?? {};
 
             if (!message) {
