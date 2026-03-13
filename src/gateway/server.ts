@@ -7,6 +7,7 @@ import type { SkillLoader } from "../skills/loader.js";
 import { AgentRuntime } from "../agent/runtime.js";
 import { ChannelRegistry } from "../channels/registry.js";
 import { ClientRegistry } from "./client.js";
+import { CronScheduler } from "../cron/scheduler.js";
 import { handleRequest } from "./handlers.js";
 import { globalBus } from "../bus/event-bus.js";
 import type { ConnectFrame, InboundFrame } from "./protocol.js";
@@ -28,7 +29,10 @@ export async function startGateway(
     const channels = new ChannelRegistry(config, runtime);
     await channels.startAll();
 
-    // Bridge internal bus events → broadcast to all WS clients
+    console.log("\n⏰ Starting scheduler...");
+    const scheduler = new CronScheduler(config, runtime, channels);
+    scheduler.start();
+
     setupBusBridge(clientRegistry, channels, memory, providers, config);
 
     console.log(`\n🚀 Starting gateway on ws://${host}:${port}`);
@@ -47,14 +51,13 @@ export async function startGateway(
                     uptime: process.uptime(),
                     clients: clientRegistry.count(),
                     channels: channels.list(),
+                    cronJobs: scheduler.status(),
                 });
             }
 
-            if (server.upgrade(req)) {
-                return undefined;
-            }
+            if (server.upgrade(req)) return undefined;
 
-            return new Response("MyAgent Gateway — connect via WebSocket", { status: 200 });
+            return new Response("MyAgent Gateway", { status: 200 });
         },
 
         websocket: {
@@ -75,7 +78,6 @@ export async function startGateway(
                     return;
                 }
 
-                // First frame MUST be connect — hard close if not
                 if (!client.authed && frame.type !== "connect") {
                     ws.close(1008, "First frame must be connect");
                     return;
@@ -129,6 +131,7 @@ export async function startGateway(
 
     const shutdown = async () => {
         console.log("\n🛑 Shutting down...");
+        scheduler.stop();
         clientRegistry.broadcast({
             type: "event",
             event: "shutdown",
@@ -142,7 +145,6 @@ export async function startGateway(
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
 
-    // Heartbeat — broadcast to all connected clients every 30s
     setInterval(() => {
         clientRegistry.broadcast({
             type: "event",
@@ -159,7 +161,6 @@ function handleConnect(
     config: AppConfig,
     clientRegistry: ClientRegistry
 ) {
-    // Token auth
     if (config.gateway.token) {
         const provided = frame.params?.auth?.token;
         if (provided !== config.gateway.token) {
@@ -168,7 +169,6 @@ function handleConnect(
         }
     }
 
-    // Device identity
     if (frame.params?.device) {
         client.deviceId = frame.params.device.id;
         client.deviceName = frame.params.device.name;
@@ -203,24 +203,14 @@ function setupBusBridge(
     providers: ProviderRegistry,
     config: AppConfig
 ) {
-    // Forward agent events to all WS clients
     globalBus.on("agent:run:complete", (payload) => {
-        clientRegistry.broadcast({
-            type: "event",
-            event: "agent",
-            payload,
-        });
+        clientRegistry.broadcast({ type: "event", event: "agent", payload });
     });
 
     globalBus.on("agent:tool:call", (payload) => {
-        clientRegistry.broadcast({
-            type: "event",
-            event: "agent:tool",
-            payload,
-        });
+        clientRegistry.broadcast({ type: "event", event: "agent:tool", payload });
     });
 
-    // Forward incoming channel messages to WS clients
     globalBus.on("channel:message:incoming", (payload) => {
         clientRegistry.broadcast({
             type: "event",
@@ -235,5 +225,13 @@ function setupBusBridge(
             event: "chat:sent",
             payload: { ...(payload as object), ts: Date.now() },
         });
+    });
+
+    globalBus.on("cron:job:start", (payload) => {
+        clientRegistry.broadcast({ type: "event", event: "cron:start", payload });
+    });
+
+    globalBus.on("cron:job:complete", (payload) => {
+        clientRegistry.broadcast({ type: "event", event: "cron:complete", payload });
     });
 }

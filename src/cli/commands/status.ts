@@ -3,13 +3,15 @@ import type { Memory } from "../../memory/memory.js";
 import type { ToolRegistry } from "../../tools/registry.js";
 import type { SkillLoader } from "../../skills/loader.js";
 import type { ProviderRegistry } from "../../providers/registry.js";
+import type { CronScheduler } from "../../cron/scheduler.js";
 
 export function statusCommand(
     config: AppConfig,
     memory: Memory,
     tools: ToolRegistry,
     skills: SkillLoader,
-    providers: ProviderRegistry
+    providers: ProviderRegistry,
+    scheduler?: CronScheduler
 ) {
     const line = "─".repeat(48);
 
@@ -62,12 +64,24 @@ export function statusCommand(
     const entries = memory.list();
     console.log(`    ${entries.length} entries stored`);
     if (entries.length > 0) {
-        const recent = entries.slice(0, 3);
-        for (const e of recent) {
+        for (const e of entries.slice(0, 3)) {
             console.log(`    • ${e.key}: ${e.content.slice(0, 60)}${e.content.length > 60 ? "..." : ""}`);
         }
-        if (entries.length > 3) {
-            console.log(`    ... and ${entries.length - 3} more`);
+        if (entries.length > 3) console.log(`    ... and ${entries.length - 3} more`);
+    }
+
+    if (scheduler) {
+        console.log(`\n  Cron Jobs`);
+        const jobs = scheduler.status();
+        if (jobs.length === 0) {
+            console.log(`    none configured`);
+        } else {
+            for (const j of jobs) {
+                console.log(`    ${j.id}`);
+                console.log(`      Next run:  ${j.nextRun}`);
+                console.log(`      Last run:  ${j.lastRun ?? "never"}`);
+                console.log(`      Running:   ${j.running}`);
+            }
         }
     }
 

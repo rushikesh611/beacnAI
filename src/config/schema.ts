@@ -39,6 +39,7 @@ export const DiscordChannelConfigSchema = z.object({
     token: z.string(),
     guildId: z.string().optional(),
     allowedChannelIds: z.array(z.string()).optional(),
+    defaultChannelId: z.string().optional(),
     agentId: z.string().default("default"),
 });
 

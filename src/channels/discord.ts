@@ -62,9 +62,20 @@ export class DiscordChannel implements Channel {
     }
 
     async send({ channelId, content }: { channelId: string; content: string }): Promise<void> {
-        const channel = await this.client.channels.fetch(channelId);
+        let targetId = channelId;
+
+        // If channelId is not a snowflake (all digits), use fallback
+        if (!/^\d+$/.test(targetId)) {
+            targetId = this.config.defaultChannelId || this.config.allowedChannelIds?.[0] || "";
+        }
+
+        if (!targetId) {
+            throw new Error(`No valid Discord channel ID found for "${channelId}"`);
+        }
+
+        const channel = await this.client.channels.fetch(targetId);
         if (!channel?.isTextBased()) {
-            throw new Error(`Channel ${channelId} is not a text channel`);
+            throw new Error(`Channel ${targetId} is not a text channel`);
         }
 
         // Split long responses into chunks — Discord's 2000 char limit
