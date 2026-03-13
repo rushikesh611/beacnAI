@@ -21,7 +21,7 @@ export const ProviderConfigSchema = z.discriminatedUnion("type", [
     z.object({
         type: z.literal("ollama"),
         apiBase: z.string().default("http://localhost:11434"),
-        defaultModel: z.string().default("llama3.2")
+        defaultModel: z.string().default("qwen2.5")
     })
 ])
 

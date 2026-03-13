@@ -12,7 +12,7 @@
         "local": {
             "type": "ollama",
             "apiBase": "http://localhost:11434",
-            "defaultModel": "llama3.2"
+            "defaultModel": "qwen2.5"
         }
     },
     "agents": {

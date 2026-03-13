@@ -7,7 +7,9 @@
     "dev": "bun run --watch src/index.ts gateway",
     "start": "bun run src/index.ts gateway",
     "chat": "bun run src/index.ts chat",
-    "status": "bun run src/index.ts status"
+    "status": "bun run src/index.ts status",
+    "memory": "bun run src/index.ts memory",
+    "connect": "bun run src/index.ts connect"
   },
   "devDependencies": {
     "@types/bun": "^1.3.10"
