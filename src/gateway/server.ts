@@ -6,11 +6,10 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { SkillLoader } from "../skills/loader.js";
 import { AgentRuntime } from "../agent/runtime.js";
 import { ChannelRegistry } from "../channels/registry.js";
+import { ClientRegistry } from "./client.js";
+import { handleRequest } from "./handlers.js";
 import { globalBus } from "../bus/event-bus.js";
-
-type GatewayWebSocketData = {
-    ip: string | null;
-}
+import type { ConnectFrame, InboundFrame } from "./protocol.js";
 
 export async function startGateway(
     config: AppConfig,
@@ -23,11 +22,14 @@ export async function startGateway(
     const { host, port } = config.gateway;
 
     const runtime = new AgentRuntime(config, providers, sessions, memory, tools, skills);
+    const clientRegistry = new ClientRegistry();
 
-    // Start channels
     console.log("\n🔌 Starting channels...");
     const channels = new ChannelRegistry(config, runtime);
     await channels.startAll();
+
+    // Bridge internal bus events → broadcast to all WS clients
+    setupBusBridge(clientRegistry, channels, memory, providers, config);
 
     console.log(`\n🚀 Starting gateway on ws://${host}:${port}`);
 
@@ -42,36 +44,82 @@ export async function startGateway(
                 return Response.json({
                     ok: true,
                     ts: Date.now(),
+                    uptime: process.uptime(),
+                    clients: clientRegistry.count(),
                     channels: channels.list(),
                 });
             }
 
-            if (server.upgrade(req, { data: { ip: req.headers.get("x-forwarded-for") } })) {
+            if (server.upgrade(req)) {
                 return undefined;
             }
 
-            return new Response("MyAgent Gateway", { status: 200 });
+            return new Response("MyAgent Gateway — connect via WebSocket", { status: 200 });
         },
 
         websocket: {
-            data: {} as GatewayWebSocketData,
             open(ws) {
-                console.log(`[Gateway] Client connected`);
-                globalBus.emit("gateway:client:connect", { ws });
+                const client = clientRegistry.add(ws);
+                console.log(`[Gateway] Client connected: ${client.id}`);
             },
 
-            message(ws, message) {
+            message(ws, rawMessage) {
+                const client = clientRegistry.getByWs(ws);
+                if (!client) return;
+
+                let frame: InboundFrame;
                 try {
-                    const frame = JSON.parse(message as string);
-                    handleFrame(ws, frame, config, runtime);
+                    frame = JSON.parse(rawMessage as string) as InboundFrame;
                 } catch {
                     ws.close(1003, "Invalid JSON");
+                    return;
                 }
+
+                // First frame MUST be connect — hard close if not
+                if (!client.authed && frame.type !== "connect") {
+                    ws.close(1008, "First frame must be connect");
+                    return;
+                }
+
+                if (frame.type === "connect") {
+                    handleConnect(frame, client, config, clientRegistry);
+                    return;
+                }
+
+                if (frame.type === "req") {
+                    handleRequest(frame, client, {
+                        clientRegistry,
+                        runtime,
+                        channels,
+                        memory,
+                        providers,
+                        config,
+                    }).then((response) => {
+                        clientRegistry.send(client, response);
+                    }).catch((err) => {
+                        clientRegistry.send(client, {
+                            type: "res",
+                            id: frame.id,
+                            ok: false,
+                            error: err instanceof Error ? err.message : String(err),
+                        });
+                    });
+                    return;
+                }
+
+                clientRegistry.send(client, {
+                    type: "error",
+                    error: `Unknown frame type: ${(frame as { type: string }).type}`,
+                });
             },
 
             close(ws) {
-                console.log(`[Gateway] Client disconnected`);
-                globalBus.emit("gateway:client:disconnect", { ws });
+                const client = clientRegistry.getByWs(ws);
+                if (client) {
+                    console.log(`[Gateway] Client disconnected: ${client.id}`);
+                    clientRegistry.remove(ws);
+                    globalBus.emit("gateway:client:disconnect", { clientId: client.id });
+                }
             },
         },
     });
@@ -79,9 +127,13 @@ export async function startGateway(
     console.log(`✅ Gateway listening on ws://${host}:${port}`);
     console.log(`   Health: http://${host}:${port}/health\n`);
 
-    // Graceful shutdown — stop channels cleanly before exit
     const shutdown = async () => {
         console.log("\n🛑 Shutting down...");
+        clientRegistry.broadcast({
+            type: "event",
+            event: "shutdown",
+            payload: { ts: Date.now() },
+        });
         await channels.stopAll();
         server.stop();
         process.exit(0);
@@ -90,113 +142,98 @@ export async function startGateway(
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
 
+    // Heartbeat — broadcast to all connected clients every 30s
     setInterval(() => {
+        clientRegistry.broadcast({
+            type: "event",
+            event: "heartbeat",
+            payload: { ts: Date.now(), uptime: process.uptime() },
+        });
         globalBus.emit("gateway:heartbeat", { ts: Date.now() });
     }, 30_000);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleFrame(ws: any, frame: any, config: AppConfig, runtime: AgentRuntime) {
-    if (!frame.type) {
-        ws.send(JSON.stringify({ type: "error", error: "Missing frame type" }));
-        return;
-    }
-
-    switch (frame.type) {
-        case "connect": {
-            if (config.gateway.token) {
-                const provided = frame.params?.auth?.token;
-                if (provided !== config.gateway.token) {
-                    ws.close(1008, "Unauthorized");
-                    return;
-                }
-            }
-            ws.send(JSON.stringify({
-                type: "event",
-                event: "hello-ok",
-                payload: { version: "0.1.0", ts: Date.now(), health: { ok: true } },
-            }));
-            break;
+function handleConnect(
+    frame: ConnectFrame,
+    client: import("./client.js").ConnectedClient,
+    config: AppConfig,
+    clientRegistry: ClientRegistry
+) {
+    // Token auth
+    if (config.gateway.token) {
+        const provided = frame.params?.auth?.token;
+        if (provided !== config.gateway.token) {
+            client.ws.close(1008, "Unauthorized");
+            return;
         }
-
-        case "req":
-            await handleRequest(ws, frame, runtime);
-            break;
-
-        default:
-            ws.send(JSON.stringify({
-                type: "res",
-                id: frame.id,
-                ok: false,
-                error: `Unknown frame type: ${frame.type}`,
-            }));
     }
+
+    // Device identity
+    if (frame.params?.device) {
+        client.deviceId = frame.params.device.id;
+        client.deviceName = frame.params.device.name;
+        client.role = frame.params.device.role ?? "client";
+    }
+
+    client.authed = true;
+
+    console.log(
+        `[Gateway] Client authed: ${client.id}` +
+        (client.deviceName ? ` (${client.deviceName})` : "")
+    );
+
+    globalBus.emit("gateway:client:connect", { clientId: client.id, role: client.role });
+
+    clientRegistry.send(client, {
+        type: "event",
+        event: "hello-ok",
+        payload: {
+            version: "0.1.0",
+            ts: Date.now(),
+            health: { ok: true },
+            clientId: client.id,
+        },
+    });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleRequest(ws: any, frame: any, runtime: AgentRuntime) {
-    const { id, method, params } = frame;
+function setupBusBridge(
+    clientRegistry: ClientRegistry,
+    channels: ChannelRegistry,
+    memory: Memory,
+    providers: ProviderRegistry,
+    config: AppConfig
+) {
+    // Forward agent events to all WS clients
+    globalBus.on("agent:run:complete", (payload) => {
+        clientRegistry.broadcast({
+            type: "event",
+            event: "agent",
+            payload,
+        });
+    });
 
-    switch (method) {
-        case "health":
-            ws.send(JSON.stringify({
-                type: "res", id, ok: true,
-                payload: { ok: true, ts: Date.now() },
-            }));
-            break;
+    globalBus.on("agent:tool:call", (payload) => {
+        clientRegistry.broadcast({
+            type: "event",
+            event: "agent:tool",
+            payload,
+        });
+    });
 
-        case "status":
-            ws.send(JSON.stringify({
-                type: "res", id, ok: true,
-                payload: { version: "0.1.0", uptime: process.uptime() },
-            }));
-            break;
+    // Forward incoming channel messages to WS clients
+    globalBus.on("channel:message:incoming", (payload) => {
+        clientRegistry.broadcast({
+            type: "event",
+            event: "chat",
+            payload: { ...(payload as object), ts: Date.now() },
+        });
+    });
 
-        case "agent": {
-            const { agentId = "default", channelId = "ws", userId = "ws-user", message } = params ?? {};
-
-            if (!message) {
-                ws.send(JSON.stringify({ type: "res", id, ok: false, error: "Missing message" }));
-                return;
-            }
-
-            try {
-                const result = await runtime.run({
-                    agentId,
-                    channelId,
-                    userId,
-                    message,
-                    onChunk: (chunk) => {
-                        ws.send(JSON.stringify({
-                            type: "event",
-                            event: "agent:chunk",
-                            payload: { id, chunk },
-                        }));
-                    },
-                });
-
-                ws.send(JSON.stringify({
-                    type: "res", id, ok: true,
-                    payload: {
-                        response: result.response,
-                        toolCallsMade: result.toolCallsMade,
-                        inputTokens: result.inputTokens,
-                        outputTokens: result.outputTokens,
-                    },
-                }));
-            } catch (err) {
-                ws.send(JSON.stringify({
-                    type: "res", id, ok: false,
-                    error: err instanceof Error ? err.message : String(err),
-                }));
-            }
-            break;
-        }
-
-        default:
-            ws.send(JSON.stringify({
-                type: "res", id, ok: false,
-                error: `Unknown method: ${method}`,
-            }));
-    }
+    globalBus.on("channel:message:sent", (payload) => {
+        clientRegistry.broadcast({
+            type: "event",
+            event: "chat:sent",
+            payload: { ...(payload as object), ts: Date.now() },
+        });
+    });
 }
